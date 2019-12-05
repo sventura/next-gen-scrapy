@@ -1,0 +1,107 @@
+---
+title: "BigDataBowl"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(gganimate)
+```
+
+```{r}
+file.tracking <- "/Users/smallepalle/Downloads/Big-Data-Bowl-master/Data/tracking_gameId_2017090700.csv"
+file.game <- "/Users/smallepalle/Downloads/Big-Data-Bowl-master/Data/games.csv"
+file.plays <- "/Users/smallepalle/Downloads/Big-Data-Bowl-master/Data/plays.csv"
+
+tracking.example <- read_csv(file.tracking)
+games.sum <- read_csv(file.game) 
+plays.sum <- read_csv(file.plays) 
+
+tracking.df <- tracking.example %>% inner_join(games.sum) %>% inner_join(plays.sum) 
+```
+
+```{r}
+scrapy <- read_csv("https://raw.githubusercontent.com/sarahmallepalle/next-gen-scrapy/master/pass_and_game_data.csv")
+complete.scrapy <- subset(scrapy, game_id == 2017090700 & pass_type == "COMPLETE") %>%
+  select(x_coord, y_coord)
+complete.scrapy$source <- "next-gen-scraPy"
+```
+
+```{r}
+complete.kc <- subset(tracking.df, event == "pass_outcome_caught" & possessionTeam == "KC")
+complete.kc <- subset(complete.kc, !grepl("TOUCHDOWN", playDescription))
+
+complete.kc.frames <- complete.kc %>% select(frame.id, playId) %>% unique()
+
+complete.ball.locations <- subset(tracking.df, team == "ball")
+complete.ball.locations <- left_join(complete.kc.frames, complete.ball.locations) %>%
+  select(x, y, quarter, yardlineSide, yardlineNumber, PassLength)
+```
+
+```{r}
+complete.ball.locations$yardlineNumber <- 
+  ifelse(complete.ball.locations$yardlineSide == "KC" & complete.ball.locations$quarter %in% c(2,3),
+         100-complete.ball.locations$yardlineNumber, complete.ball.locations$yardlineNumber)
+
+complete.ball.locations$yardlineNumber <- 
+  ifelse(complete.ball.locations$yardlineSide == "NE" & complete.ball.locations$quarter %in% c(1,4),
+         100-complete.ball.locations$yardlineNumber, complete.ball.locations$yardlineNumber)
+```
+
+```{r}
+kc14 <- subset(complete.ball.locations, yardlineSide == "KC" & quarter %in% c(1,4))
+kc14$y_coord <- kc14$x - kc14$yardlineNumber - 10
+kc14$x_coord <- -1*kc14$y + 160/6
+
+kc23 <- subset(complete.ball.locations, yardlineSide == "KC" & quarter %in% c(2,3))
+kc23$y_coord <- -1*(kc23$x - kc23$yardlineNumber - 10)
+kc23$x_coord <- kc23$y - 160/6
+
+kc_full <- rbind(kc14, kc23)
+kc_full$y_coord <- round(kc_full$y_coord, 1)
+kc_full$x_coord <- round(kc_full$x_coord, 1)
+```
+
+```{r}
+ne14 <- subset(complete.ball.locations, yardlineSide == "NE" & quarter %in% c(1,4))
+ne14$y_coord <- ne14$x - ne14$yardlineNumber - 10
+ne14$x_coord <- -1*ne14$y + 160/6
+
+ne23 <- subset(complete.ball.locations, yardlineSide == "NE" & quarter %in% c(2,3))
+ne23$y_coord <- -1*(ne23$x - ne23$yardlineNumber - 10)
+ne23$x_coord <- ne23$y - 160/6
+
+ne_full <- rbind(ne14, ne23)
+ne_full$y_coord <- round(ne_full$y_coord, 1)
+ne_full$x_coord <- round(ne_full$x_coord, 1)
+```
+
+```{r}
+complete.tracking <- rbind(kc_full, ne_full)
+complete.tracking$source <- "Tracking Data"
+complete.tracking <- complete.tracking %>% select(x_coord, y_coord, source)
+```
+
+```{r}
+all.complete.passes <- rbind(complete.scrapy, complete.tracking)
+
+ggplot(all.complete.passes, aes(x = x_coord, y = y_coord, color = source)) + 
+  geom_point(alpha = 0.5) + 
+  labs(title = "KC Complete Passes, 2017 Week 1 KC vs. NE\ngame_id = 2017090700")
+```
+
+
+
+
+
+
+
+
+
+
+
